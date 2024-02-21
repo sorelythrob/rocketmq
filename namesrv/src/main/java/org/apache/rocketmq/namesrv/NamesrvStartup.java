@@ -47,8 +47,8 @@ public class NamesrvStartup {
 
     public static void main(String[] args) {
         String canonicalPath = getCanonicalPath();
-        System.setProperty("user.home", canonicalPath);
-        System.setProperty("rocketmq.home.dir", canonicalPath + File.separator + "home");
+        System.setProperty("user.home", canonicalPath + File.separator + "home");
+        System.setProperty("rocketmq.home.dir", canonicalPath);
         main0(args);
     }
 

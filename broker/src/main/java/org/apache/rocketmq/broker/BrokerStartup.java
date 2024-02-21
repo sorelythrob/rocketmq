@@ -56,8 +56,8 @@ public class BrokerStartup {
 
 
         String canonicalPath = getCanonicalPath();
-        System.setProperty("user.home", canonicalPath);
-        System.setProperty("rocketmq.home.dir", canonicalPath + File.separator + "home");
+        System.setProperty("user.home", canonicalPath + File.separator + "home");
+        System.setProperty("rocketmq.home.dir", canonicalPath);
         args = new String[2];
         args[0] = "-c";
         args[1] = canonicalPath + File.separator + "conf" + File.separator + "broker.conf";
