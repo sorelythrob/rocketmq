@@ -48,6 +48,8 @@ public class NamesrvStartup {
     private static CommandLine commandLine = null;
 
     public static void main(String[] args) {
+        System.setProperty("user.home","D:\\code\\java\\rocketmq\\home");
+        System.setProperty("rocketmq.home.dir","D:\\code\\java\\rocketmq");
         main0(args);
     }
 
