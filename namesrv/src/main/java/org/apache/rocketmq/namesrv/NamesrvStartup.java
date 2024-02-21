@@ -19,10 +19,8 @@ package org.apache.rocketmq.namesrv;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.joran.spi.JoranException;
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+
+import java.io.*;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import org.apache.commons.cli.CommandLine;
@@ -48,9 +46,19 @@ public class NamesrvStartup {
     private static CommandLine commandLine = null;
 
     public static void main(String[] args) {
-        System.setProperty("user.home","D:\\code\\java\\rocketmq\\home");
-        System.setProperty("rocketmq.home.dir","D:\\code\\java\\rocketmq");
+        String canonicalPath = getCanonicalPath();
+        System.setProperty("user.home", canonicalPath);
+        System.setProperty("rocketmq.home.dir", canonicalPath + File.separator + "home");
         main0(args);
+    }
+
+    private static String getCanonicalPath() {
+        File file = new File("");
+        try {
+            return file.getCanonicalPath();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static NamesrvController main0(String[] args) {
