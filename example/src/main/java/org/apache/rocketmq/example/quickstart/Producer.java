@@ -73,6 +73,7 @@ public class Producer {
             }
         }
 
+        Thread.sleep(1000000000);
         /*
          * Shut down once the producer instance is not longer in use.
          */

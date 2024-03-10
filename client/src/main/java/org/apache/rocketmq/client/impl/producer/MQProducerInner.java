@@ -23,8 +23,11 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.protocol.header.CheckTransactionStateRequestHeader;
 
 public interface MQProducerInner {
+
+    //获取该生产者发送过的主题列表
     Set<String> getPublishTopicList();
 
+    //判断当前topic是否需要更新主题发布信息
     boolean isPublishTopicNeedUpdate(final String topic);
 
     TransactionCheckListener checkListener();
@@ -35,6 +38,7 @@ public interface MQProducerInner {
         final MessageExt msg,
         final CheckTransactionStateRequestHeader checkRequestHeader);
 
+    //更新topic的主题发布信息
     void updateTopicPublishInfo(final String topic, final TopicPublishInfo info);
 
     boolean isUnitMode();

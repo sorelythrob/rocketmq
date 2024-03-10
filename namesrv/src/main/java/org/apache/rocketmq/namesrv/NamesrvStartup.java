@@ -23,6 +23,7 @@ import ch.qos.logback.core.joran.spi.JoranException;
 import java.io.*;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
@@ -47,8 +48,8 @@ public class NamesrvStartup {
 
     public static void main(String[] args) {
         String canonicalPath = getCanonicalPath();
-        System.setProperty("user.home", canonicalPath + File.separator + "home");
-        System.setProperty("rocketmq.home.dir", canonicalPath);
+        System.setProperty("user.home", canonicalPath + File.separator + "home" + File.separator + "nameservera");
+        System.setProperty("rocketmq.home.dir", canonicalPath + File.separator + "home" + File.separator + "nameservera");
         main0(args);
     }
 

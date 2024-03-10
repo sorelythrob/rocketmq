@@ -96,22 +96,63 @@ import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 
 public class DefaultMQProducerImpl implements MQProducerInner {
     private final InternalLogger log = ClientLogger.getLog();
+
+    //打印日志使用，生成invokeId
     private final Random random = new Random();
+
+    //生产者门面对象
     private final DefaultMQProducer defaultMQProducer;
+
+    //主题发布信息map
     private final ConcurrentMap<String/* topic */, TopicPublishInfo> topicPublishInfoTable =
         new ConcurrentHashMap<String, TopicPublishInfo>();
+
+
+    //发送消息的hook
     private final ArrayList<SendMessageHook> sendMessageHookList = new ArrayList<SendMessageHook>();
+
+
+    //rpc hook
     private final RPCHook rpcHook;
+
+    //异步发送消息使用的队列
     private final BlockingQueue<Runnable> asyncSenderThreadPoolQueue;
+
+    //默认异步消息线程池
     private final ExecutorService defaultAsyncSenderExecutor;
+
+    //定时任务，过期request清理
     private final Timer timer = new Timer("RequestHouseKeepingService", true);
+
+
     protected BlockingQueue<Runnable> checkRequestQueue;
+
+
+
     protected ExecutorService checkExecutor;
+
+
+    //状态
     private ServiceState serviceState = ServiceState.CREATE_JUST;
+
+
+    //客户端实例对象，生产者和消费者启动后都需要注册到客户端实例对象
     private MQClientInstance mQClientFactory;
+
+
+    //注意和sendmessagehook的区别，这个可以抛出异常阻止消息发送
     private ArrayList<CheckForbiddenHook> checkForbiddenHookList = new ArrayList<CheckForbiddenHook>();
+
+
+    //压缩级别
     private int zipCompressLevel = Integer.parseInt(System.getProperty(MixAll.MESSAGE_COMPRESS_LEVEL, "5"));
+
+
+    //选择mq队列的容错策略
     private MQFaultStrategy mqFaultStrategy = new MQFaultStrategy();
+
+
+    //异步消息发送线程池，如果指定了的话就不再使用默认线程池defaultAsyncSenderExecutor
     private ExecutorService asyncSenderExecutor;
 
     public DefaultMQProducerImpl(final DefaultMQProducer defaultMQProducer) {
@@ -119,10 +160,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     }
 
     public DefaultMQProducerImpl(final DefaultMQProducer defaultMQProducer, RPCHook rpcHook) {
+
+        //生产者门面对象
         this.defaultMQProducer = defaultMQProducer;
+
+        //rpchook
         this.rpcHook = rpcHook;
 
+        //异步发送线程池队列
         this.asyncSenderThreadPoolQueue = new LinkedBlockingQueue<Runnable>(50000);
+
+        //默认的异步发送线程池
         this.defaultAsyncSenderExecutor = new ThreadPoolExecutor(
             Runtime.getRuntime().availableProcessors(),
             Runtime.getRuntime().availableProcessors(),
@@ -137,6 +185,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     return new Thread(r, "AsyncSenderExecutor_" + this.threadIndex.incrementAndGet());
                 }
             });
+
+
     }
 
     public void registerCheckForbiddenHook(CheckForbiddenHook checkForbiddenHook) {
@@ -175,6 +225,14 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         this.start(true);
     }
 
+    /**
+     * 在您提供的RocketMQ源码片段中，start方法是DefaultMQProducer的启动方法。其中参数startFactory是一个布尔值，表示是否同时启动与该生产者关联的MQClientInstance（即客户端实例）。
+     * 当startFactory为true时，不仅会启动当前的DefaultMQProducer实例，还会启动与之相关的MQClientInstance。MQClientInstance是RocketMQ客户端的核心组件，它负责管理与Broker的连接、发送和接收消息以及维护Topic路由信息等任务。
+     * 若startFactory为false，则只会启动DefaultMQProducer自身，并不启动关联的MQClientInstance。这种情况下，通常是因为MQClientInstance已经在其他地方被启动过了，或者打算稍后单独启动。
+     * 总结来说，startFactory参数用来控制是否在启动生产者的同时启动它的底层客户端实例，以确保整个消息生产和消费体系能够正常运行。
+     * @param startFactory
+     * @throws MQClientException
+     */
     public void start(final boolean startFactory) throws MQClientException {
         switch (this.serviceState) {
             case CREATE_JUST:
@@ -182,13 +240,18 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
                 this.checkConfig();
 
+                //CLIENT_INNER_PRODUCER  处理消息回退这种情况使用的生产者
                 if (!this.defaultMQProducer.getProducerGroup().equals(MixAll.CLIENT_INNER_PRODUCER_GROUP)) {
+                    //改变客户端实例对象的名称
                     this.defaultMQProducer.changeInstanceNameToPID();
                 }
 
+                //
                 this.mQClientFactory = MQClientManager.getInstance().getOrCreateMQClientInstance(this.defaultMQProducer, rpcHook);
 
+                //将生产者注册到客户端实例对象上
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
+
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
                     throw new MQClientException("The producer group[" + this.defaultMQProducer.getProducerGroup()
@@ -196,14 +259,17 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         null);
                 }
 
+                //初始化TBW102主题信息
                 this.topicPublishInfoTable.put(this.defaultMQProducer.getCreateTopicKey(), new TopicPublishInfo());
 
                 if (startFactory) {
+                    //启动客户端实例对象
                     mQClientFactory.start();
                 }
 
                 log.info("the producer [{}] start OK. sendMessageWithVIPChannel={}", this.defaultMQProducer.getProducerGroup(),
                     this.defaultMQProducer.isSendMessageWithVIPChannel());
+
                 this.serviceState = ServiceState.RUNNING;
                 break;
             case RUNNING:
@@ -217,12 +283,14 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 break;
         }
 
+        //发送心跳
         this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
 
         this.timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
+                    //扫描过期的request消息
                     RequestFutureTable.scanExpiredRequest();
                 } catch (Throwable e) {
                     log.error("scan RequestFutureTable exception", e);

@@ -89,6 +89,14 @@ public class FileWatchService extends ServiceThread {
         log.info(this.getServiceName() + " service end");
     }
 
+    /**
+     * 计算指定文件路径（filePath）所对应的文件的MD5摘要值，并以16进制字符串形式返回。
+     *
+     * @param filePath
+     * @return
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private String hash(String filePath) throws IOException, NoSuchAlgorithmException {
         Path path = Paths.get(filePath);
         md.update(Files.readAllBytes(path));

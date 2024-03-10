@@ -85,51 +85,106 @@ import org.apache.rocketmq.remoting.netty.NettyClientConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public class MQClientInstance {
+
     private final static long LOCK_TIMEOUT_MILLIS = 3000;
+
     private final InternalLogger log = ClientLogger.getLog();
+
+    // 客户端配置信息，包括NameServer地址、连接参数等。
     private final ClientConfig clientConfig;
+
+    //客户端实例index
     private final int instanceIndex;
+
+    //客户端id ip@index
     private final String clientId;
+
+    //客户端实例启动时间
     private final long bootTimestamp = System.currentTimeMillis();
+
+    //存储所有创建过的生产者实例（MQProducerInner）的集合，键为生产者组名。
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+
+    //存储所有创建过的消费者实例（MQConsumerInner）的集合，键为消费者组名。
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
+
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
+
+    //Netty客户端的配置项，用于设置网络通信相关的参数。
     private final NettyClientConfig nettyClientConfig;
+
+    //与NameServer进行交互的实现类，负责获取路由信息、发送心跳以及执行其他RPC调用。
     private final MQClientAPIImpl mQClientAPIImpl;
+
+    //MQAdmin服务的实现类，提供对Broker集群的各种管理和控制功能。
     private final MQAdminImpl mQAdminImpl;
+
+    //缓存每个Topic的路由信息。
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
+
     private final Lock lockNamesrv = new ReentrantLock();
+
     private final Lock lockHeartbeat = new ReentrantLock();
+
+    //存储Broker地址的映射表。
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
         new ConcurrentHashMap<String, HashMap<Long, String>>();
+
+    //存储Broker版本信息的映射表。
     private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
         new ConcurrentHashMap<String, HashMap<String, Integer>>();
+
+    //单线程定时任务执行器，用于调度客户端内部的任务。
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
             return new Thread(r, "MQClientFactoryScheduledThread");
         }
     });
+
+    //处理来自Broker或其他客户端的远程调用请求。
     private final ClientRemotingProcessor clientRemotingProcessor;
+
+    //拉取消息服务，负责从Broker拉取消费者需要的消息。
     private final PullMessageService pullMessageService;
+
+    //负载均衡服务，负责消费者的队列分配和重新平衡。
     private final RebalanceService rebalanceService;
+
+    //内部默认的生产者实例，用于处理一些特殊场景（如消息回退）。
     private final DefaultMQProducer defaultMQProducer;
+
+    //消费者统计管理器，收集并报告消费者的相关统计信息。
     private final ConsumerStatsManager consumerStatsManager;
+
+    //累计发送心跳次数计数器。
     private final AtomicLong sendHeartbeatTimesTotal = new AtomicLong(0);
+
+    //客户端服务的状态，表示是否已经启动成功。
     private ServiceState serviceState = ServiceState.CREATE_JUST;
+
     private Random random = new Random();
+
 
     public MQClientInstance(ClientConfig clientConfig, int instanceIndex, String clientId) {
         this(clientConfig, instanceIndex, clientId, null);
     }
 
     public MQClientInstance(ClientConfig clientConfig, int instanceIndex, String clientId, RPCHook rpcHook) {
+
         this.clientConfig = clientConfig;
+
         this.instanceIndex = instanceIndex;
+
         this.nettyClientConfig = new NettyClientConfig();
+
         this.nettyClientConfig.setClientCallbackExecutorThreads(clientConfig.getClientCallbackExecutorThreads());
+
         this.nettyClientConfig.setUseTLS(clientConfig.isUseTLS());
+
+        //处理来自Broker或其他客户端的远程调用请求。
         this.clientRemotingProcessor = new ClientRemotingProcessor(this);
+
         this.mQClientAPIImpl = new MQClientAPIImpl(this.nettyClientConfig, this.clientRemotingProcessor, rpcHook, clientConfig);
 
         if (this.clientConfig.getNamesrvAddr() != null) {
@@ -145,7 +200,9 @@ public class MQClientInstance {
 
         this.rebalanceService = new RebalanceService(this);
 
+        //内部默认的生产者实例，用于处理一些特殊场景（如消息回退）。
         this.defaultMQProducer = new DefaultMQProducer(MixAll.CLIENT_INNER_PRODUCER_GROUP);
+
         this.defaultMQProducer.resetClientConfig(clientConfig);
 
         this.consumerStatsManager = new ConsumerStatsManager(this.scheduledExecutorService);
@@ -229,17 +286,23 @@ public class MQClientInstance {
                     this.serviceState = ServiceState.START_FAILED;
                     // If not specified,looking address from name server
                     if (null == this.clientConfig.getNamesrvAddr()) {
+                        //从NameServer获取Broker集群的地址信息
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
                     // Start request-response channel
+                    //网络层启动
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
+                    //开启周期任务
                     this.startScheduledTask();
                     // Start pull service
+                    //启动消费者（Consumer）的拉取消息服务（pullMessageService），使得消费者能够按照指定的策略从Broker拉取消息进行消费。
                     this.pullMessageService.start();
                     // Start rebalance service
+                    //启动消费者的负载均衡服务（rebalanceService），负责维护消费者组内部消费者的负载均衡，包括队列分配、订阅关系管理等。
                     this.rebalanceService.start();
                     // Start push service
+                    //调用默认的DefaultMQProducer实现类的启动方法（defaultMQProducer.getDefaultMQProducerImpl().start(false)），开始生产者的功能，如同步/异步发送消息等。
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;
@@ -267,6 +330,7 @@ public class MQClientInstance {
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
 
+        //每隔一定时间（由clientConfig.getPollNameServerInterval()决定，默认是10秒）从NameServer获取所有Topic的最新路由信息，以便于客户端能够知道消息应该发送或拉取自哪些Broker。
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -279,6 +343,7 @@ public class MQClientInstance {
             }
         }, 10, this.clientConfig.getPollNameServerInterval(), TimeUnit.MILLISECONDS);
 
+        //
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
