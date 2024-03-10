@@ -18,6 +18,8 @@ package org.apache.rocketmq.client.impl.producer;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.rocketmq.client.common.ThreadLocalIndex;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.common.protocol.route.QueueData;
@@ -47,7 +49,7 @@ public class TopicPublishInfo {
     }
 
     public boolean ok() {
-        return null != this.messageQueueList && !this.messageQueueList.isEmpty();
+        return CollectionUtils.isNotEmpty(messageQueueList);
     }
 
     public List<MessageQueue> getMessageQueueList() {

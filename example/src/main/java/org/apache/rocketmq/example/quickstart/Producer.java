@@ -48,9 +48,14 @@ public class Producer {
         /*
          * Launch the instance.
          */
+
+
         producer.start();
 
-        for (int i = 0; i < 1000; i++) {
+        producer.getDefaultMQProducerImpl().registerCheckForbiddenHook(new CustomCheckForbiddenHook());
+        producer.getDefaultMQProducerImpl().registerSendMessageHook(new FillUserIdSendMessageHook());
+
+        for (int i = 0; i < 1; i++) {
             try {
 
                 /*
